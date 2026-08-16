@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\Push\Providers\WebPushProvider;
 use App\Services\Push\PushNotificationManager;
 use Illuminate\Support\ServiceProvider;
 
@@ -13,7 +14,10 @@ class PushServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(PushNotificationManager::class, function ($app) {
-            return new PushNotificationManager;
+            $manager = new PushNotificationManager;
+            $manager->registerDriver('webpush', new WebPushProvider);
+
+            return $manager;
         });
     }
 }
