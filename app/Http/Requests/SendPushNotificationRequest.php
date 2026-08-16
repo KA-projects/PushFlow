@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Dto\SendPushNotificationData;
 use Illuminate\Foundation\Http\FormRequest;
 
 class SendPushNotificationRequest extends FormRequest
@@ -9,6 +10,18 @@ class SendPushNotificationRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    public function toData(): SendPushNotificationData
+    {
+        $validated = $this->validated();
+
+        return new SendPushNotificationData(
+            title: $validated['title'],
+            body: $validated['body'],
+            endpoint: $validated['endpoint'] ?? null,
+            extra: $validated['extra'] ?? [],
+        );
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Dto\SendPushNotificationData;
 use App\Jobs\SendPushNotification;
 use App\Models\PushSubscription;
 use App\Services\Push\PushNotificationService;
@@ -37,8 +38,9 @@ class PushNotificationServiceTest extends TestCase
             'auth_token' => 'fake-auth-token',
         ]);
 
-        $queued = app(PushNotificationService::class)
-            ->queueForEndpoint('Заголовок', 'Текст', null);
+        $queued = app(PushNotificationService::class)->queueForEndpoint(
+            new SendPushNotificationData(title: 'Заголовок', body: 'Текст')
+        );
 
         $this->assertCount(2, $queued);
         Queue::assertPushed(SendPushNotification::class, 2);
@@ -64,8 +66,14 @@ class PushNotificationServiceTest extends TestCase
             'auth_token' => 'fake-auth-token',
         ]);
 
-        $queued = app(PushNotificationService::class)
-            ->queueForEndpoint('Заголовок', 'Текст', self::ENDPOINT_ONE, ['link' => '/']);
+        $queued = app(PushNotificationService::class)->queueForEndpoint(
+            new SendPushNotificationData(
+                title: 'Заголовок',
+                body: 'Текст',
+                endpoint: self::ENDPOINT_ONE,
+                extra: ['link' => '/'],
+            )
+        );
 
         $this->assertCount(1, $queued);
         Queue::assertPushed(SendPushNotification::class, 1);
@@ -78,8 +86,9 @@ class PushNotificationServiceTest extends TestCase
     {
         Queue::fake();
 
-        $queued = app(PushNotificationService::class)
-            ->queueForEndpoint('Заголовок', 'Текст', null);
+        $queued = app(PushNotificationService::class)->queueForEndpoint(
+            new SendPushNotificationData(title: 'Заголовок', body: 'Текст')
+        );
 
         $this->assertTrue($queued->isEmpty());
         Queue::assertNothingPushed();

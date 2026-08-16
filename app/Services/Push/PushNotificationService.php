@@ -2,6 +2,7 @@
 
 namespace App\Services\Push;
 
+use App\Dto\SendPushNotificationData;
 use App\Jobs\SendPushNotification;
 use App\Models\PushSubscription;
 use Illuminate\Support\Collection;
@@ -11,16 +12,16 @@ class PushNotificationService
     /**
      * Постановка push-уведомления в очередь для одной подписки (по endpoint) или всех.
      *
-     * @param  array<string, mixed>  $extra
+     * @return Collection<int, PushSubscription>
      */
-    public function queueForEndpoint(string $title, string $body, ?string $endpoint, array $extra = []): Collection
+    public function queueForEndpoint(SendPushNotificationData $data): Collection
     {
-        $subscriptions = $endpoint !== null
-            ? PushSubscription::where('endpoint', $endpoint)->get()
+        $subscriptions = $data->endpoint !== null
+            ? PushSubscription::where('endpoint', $data->endpoint)->get()
             : PushSubscription::all();
 
         foreach ($subscriptions as $subscription) {
-            SendPushNotification::dispatch($subscription->id, $title, $body, $extra);
+            SendPushNotification::dispatch($subscription->id, $data->title, $data->body, $data->extra);
         }
 
         return $subscriptions;

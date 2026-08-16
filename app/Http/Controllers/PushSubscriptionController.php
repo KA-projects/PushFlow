@@ -15,7 +15,7 @@ class PushSubscriptionController extends Controller
      */
     public function subscribe(SubscribePushRequest $request): JsonResponse
     {
-        $subscription = $this->service->upsert($request->validated());
+        $subscription = $this->service->upsert($request->toData());
 
         return response()->json($subscription, $subscription->wasRecentlyCreated ? 201 : 200);
     }

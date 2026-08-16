@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Dto\PushSubscriptionData;
 use App\Models\PushSubscription;
 use App\Services\Push\PushSubscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,13 +19,13 @@ class PushSubscriptionServiceTest extends TestCase
      */
     public function test_service_creates_a_new_subscription(): void
     {
-        $subscription = app(PushSubscriptionService::class)->upsert([
-            'endpoint' => self::ENDPOINT,
-            'keys' => [
-                'p256dh' => 'fake-p256dh-key',
-                'auth' => 'fake-auth-token',
-            ],
-        ]);
+        $subscription = app(PushSubscriptionService::class)->upsert(
+            new PushSubscriptionData(
+                endpoint: self::ENDPOINT,
+                p256dh: 'fake-p256dh-key',
+                auth: 'fake-auth-token',
+            )
+        );
 
         $this->assertTrue($subscription->wasRecentlyCreated);
         $this->assertSame('webpush', $subscription->provider);
@@ -46,13 +47,13 @@ class PushSubscriptionServiceTest extends TestCase
             'auth_token' => 'old-auth-token',
         ]);
 
-        $subscription = app(PushSubscriptionService::class)->upsert([
-            'endpoint' => self::ENDPOINT,
-            'keys' => [
-                'p256dh' => 'new-p256dh-key',
-                'auth' => 'new-auth-token',
-            ],
-        ]);
+        $subscription = app(PushSubscriptionService::class)->upsert(
+            new PushSubscriptionData(
+                endpoint: self::ENDPOINT,
+                p256dh: 'new-p256dh-key',
+                auth: 'new-auth-token',
+            )
+        );
 
         $this->assertFalse($subscription->wasRecentlyCreated);
         $this->assertSame(1, PushSubscription::count());

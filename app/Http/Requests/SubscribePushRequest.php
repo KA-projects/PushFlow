@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Dto\PushSubscriptionData;
 use Illuminate\Foundation\Http\FormRequest;
 
 class SubscribePushRequest extends FormRequest
@@ -9,6 +10,17 @@ class SubscribePushRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    public function toData(): PushSubscriptionData
+    {
+        $validated = $this->validated();
+
+        return new PushSubscriptionData(
+            endpoint: $validated['endpoint'],
+            p256dh: $validated['keys']['p256dh'],
+            auth: $validated['keys']['auth'],
+        );
     }
 
     /**
