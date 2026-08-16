@@ -4,8 +4,12 @@ namespace Tests\Feature;
 
 use App\Jobs\SendPushNotification;
 use App\Models\PushSubscription;
+use App\Services\Push\PushNotificationManager;
+use App\Services\Push\PushProviderInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
 use Tests\TestCase;
 
 class PushNotificationControllerTest extends TestCase
@@ -92,5 +96,52 @@ class PushNotificationControllerTest extends TestCase
         $this->postJson('/api/push/send', [])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['title', 'body']);
+    }
+
+    /**
+     * Сквозной тест: POST /api/push/send доставляет уведомления через драйвер,
+     * выбранный по полю provider каждой подписки — webpush через браузерный драйвер,
+     * fcm через MockFcmProvider (запись в логи).
+     */
+    public function test_send_end_to_end_routes_to_provider_per_subscription(): void
+    {
+        Log::spy();
+
+        $webPushMock = Mockery::mock(PushProviderInterface::class);
+        $webPushMock->shouldReceive('send')
+            ->once()
+            ->with(
+                Mockery::on(fn (PushSubscription $s) => $s->endpoint === self::ENDPOINT_ONE),
+                'Заголовок',
+                'Текст',
+                []
+            );
+
+        app(PushNotificationManager::class)->registerDriver('webpush', $webPushMock);
+
+        $this->makeSubscription(self::ENDPOINT_ONE);
+
+        PushSubscription::create([
+            'endpoint' => self::ENDPOINT_TWO,
+            'provider' => 'fcm',
+            'public_key' => 'fake-p256dh-key',
+            'auth_token' => 'fake-auth-token',
+        ]);
+
+        $response = $this->postJson('/api/push/send', [
+            'title' => 'Заголовок',
+            'body' => 'Текст',
+        ]);
+
+        $response->assertOk()->assertJson([
+            'queued' => 2,
+        ]);
+
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->with(
+                'Sending FCM notification via Google API...',
+                Mockery::on(fn (array $context) => $context['endpoint'] === self::ENDPOINT_TWO)
+            );
     }
 }
