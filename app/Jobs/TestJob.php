@@ -11,9 +11,7 @@ class TestJob implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(public string $message = 'Test job executed')
-    {
-    }
+    public function __construct(public string $message = 'Test job executed') {}
 
     public function handle(): void
     {
