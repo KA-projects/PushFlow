@@ -3,10 +3,14 @@
 namespace Tests\Feature;
 
 use App\Contracts\PushProviderInterface;
+use App\Dto\SendResult;
+use App\Enums\PushNotificationStatus;
+use App\Jobs\CheckPushDelivery;
 use App\Jobs\SendPushNotification;
+use App\Models\PushNotification;
 use App\Models\PushSubscription;
+use App\Services\Push\Exceptions\TemporaryPushException;
 use App\Services\Push\PushNotificationManager;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
@@ -16,17 +20,37 @@ class SendPushNotificationTest extends TestCase
 {
     use RefreshDatabase;
 
-    /**
-     * Проверяем, что Job вызывает драйвер, выбранный по полю provider подписки.
-     */
-    public function test_job_sends_notification_via_subscription_provider(): void
+    private function makeSubscription(array $attributes = []): PushSubscription
     {
-        $subscription = PushSubscription::create([
+        return PushSubscription::create(array_merge([
             'endpoint' => 'https://example.com/push',
             'provider' => 'test-provider',
             'public_key' => 'public-key',
             'auth_token' => 'auth-token',
-        ]);
+        ], $attributes));
+    }
+
+    private function makeNotification(PushSubscription $subscription, array $attributes = []): PushNotification
+    {
+        return PushNotification::create(array_merge([
+            'push_subscription_id' => $subscription->id,
+            'title' => 'Заголовок',
+            'body' => 'Текст',
+            'payload' => ['link' => 'https://example.com/x'],
+            'status' => PushNotificationStatus::Pending,
+            'provider' => $subscription->provider,
+        ], $attributes));
+    }
+
+    /**
+     * Проверяем, что Job вызывает драйвер, сохраняет ticket и переводит уведомление в accepted.
+     */
+    public function test_job_sends_notification_and_marks_accepted(): void
+    {
+        Queue::fake();
+
+        $subscription = $this->makeSubscription();
+        $notification = $this->makeNotification($subscription);
 
         $provider = Mockery::mock(PushProviderInterface::class);
         $provider->shouldReceive('send')
@@ -35,23 +59,114 @@ class SendPushNotificationTest extends TestCase
                 Mockery::on(fn (PushSubscription $s) => $s->is($subscription)),
                 'Заголовок',
                 'Текст',
-                ['link' => 'https://example.com/x']
-            );
+                ['link' => 'https://example.com/x'],
+                'notification-'.$notification->id
+            )
+            ->andReturn(new SendResult(ticketId: 'ticket-123'));
 
-        $manager = app(PushNotificationManager::class);
-        $manager->registerDriver('test-provider', $provider);
+        app(PushNotificationManager::class)->registerDriver('test-provider', $provider);
 
-        SendPushNotification::dispatch($subscription->id, 'Заголовок', 'Текст', ['link' => 'https://example.com/x']);
+        (new SendPushNotification($notification->id))->handle(app(PushNotificationManager::class));
+
+        $notification->refresh();
+
+        $this->assertSame(PushNotificationStatus::Accepted, $notification->status);
+        $this->assertSame('ticket-123', $notification->ticket_id);
+        $this->assertNotNull($notification->sent_at);
+        $this->assertSame(1, $notification->attempts);
+
+        Queue::assertPushed(CheckPushDelivery::class);
+
+        $this->assertDatabaseHas('push_attempts', [
+            'notification_id' => $notification->id,
+            'status' => 'accepted',
+            'ticket_id' => 'ticket-123',
+        ]);
     }
 
     /**
-     * Проверяем, что Job выбрасывает исключение, если подписка не найдена в БД.
+     * Проверяем, что Job завершается молча, если уведомление не найдено.
      */
-    public function test_job_throws_when_subscription_not_found(): void
+    public function test_job_is_ignored_when_notification_not_found(): void
     {
-        $this->expectException(ModelNotFoundException::class);
+        (new SendPushNotification(99999))->handle(app(PushNotificationManager::class));
 
-        SendPushNotification::dispatch(99999, 'Заголовок', 'Текст');
+        $this->assertTrue(true);
+    }
+
+    /**
+     * Проверяем, что Job не отправляет повторно уже доставленное уведомление.
+     */
+    public function test_job_does_not_resent_delivered_notification(): void
+    {
+        Queue::fake();
+
+        $subscription = $this->makeSubscription();
+        $notification = $this->makeNotification($subscription, [
+            'status' => PushNotificationStatus::Delivered,
+            'delivered_at' => now(),
+        ]);
+
+        $provider = Mockery::mock(PushProviderInterface::class);
+        $provider->shouldReceive('send')->never();
+
+        app(PushNotificationManager::class)->registerDriver('test-provider', $provider);
+
+        (new SendPushNotification($notification->id))->handle(app(PushNotificationManager::class));
+
+        $notification->refresh();
+        $this->assertSame(PushNotificationStatus::Delivered, $notification->status);
+        Queue::assertNothingPushed();
+    }
+
+    /**
+     * Проверяем, что при временной ошибке Job пробрасывает исключение (для retry) и возвращает статус в pending.
+     */
+    public function test_temporary_error_rethrows_and_returns_to_pending(): void
+    {
+        $subscription = $this->makeSubscription();
+        $notification = $this->makeNotification($subscription);
+
+        $provider = Mockery::mock(PushProviderInterface::class);
+        $provider->shouldReceive('send')->andThrow(TemporaryPushException::http(503));
+
+        app(PushNotificationManager::class)->registerDriver('test-provider', $provider);
+
+        try {
+            (new SendPushNotification($notification->id))->handle(app(PushNotificationManager::class));
+            $this->fail('Ожидалось исключение для retry.');
+        } catch (TemporaryPushException $exception) {
+            $this->assertSame('HTTP_503', $exception->getErrorCode());
+        }
+
+        $notification->refresh();
+        $this->assertSame(PushNotificationStatus::Pending, $notification->status);
+
+        $this->assertDatabaseHas('push_attempts', [
+            'notification_id' => $notification->id,
+            'status' => 'error',
+            'error_code' => 'HTTP_503',
+        ]);
+    }
+
+    /**
+     * Проверяем, что при неактивной подписке уведомление помечается failed.
+     */
+    public function test_job_fails_notification_when_subscription_inactive(): void
+    {
+        $subscription = $this->makeSubscription(['is_active' => false]);
+        $notification = $this->makeNotification($subscription);
+
+        $provider = Mockery::mock(PushProviderInterface::class);
+        $provider->shouldReceive('send')->never();
+
+        app(PushNotificationManager::class)->registerDriver('test-provider', $provider);
+
+        (new SendPushNotification($notification->id))->handle(app(PushNotificationManager::class));
+
+        $notification->refresh();
+        $this->assertSame(PushNotificationStatus::Failed, $notification->status);
+        $this->assertSame('DEVICE_INACTIVE', $notification->error_code);
     }
 
     /**
@@ -61,7 +176,7 @@ class SendPushNotificationTest extends TestCase
     {
         Queue::fake();
 
-        SendPushNotification::dispatch(1, 'Заголовок', 'Текст');
+        SendPushNotification::dispatch(1);
 
         Queue::assertPushed(SendPushNotification::class);
     }

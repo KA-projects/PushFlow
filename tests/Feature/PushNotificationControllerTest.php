@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Contracts\PushProviderInterface;
+use App\Dto\DeliveryReceipt;
+use App\Dto\SendResult;
 use App\Jobs\SendPushNotification;
 use App\Models\PushSubscription;
 use App\Services\Push\PushNotificationManager;
@@ -114,8 +116,12 @@ class PushNotificationControllerTest extends TestCase
                 Mockery::on(fn (PushSubscription $s) => $s->endpoint === self::ENDPOINT_ONE),
                 'Заголовок',
                 'Текст',
-                []
-            );
+                [],
+                Mockery::any()
+            )
+            ->andReturn(new SendResult(ticketId: 'ticket-webpush'));
+        $webPushMock->shouldReceive('checkDelivery')
+            ->andReturn(new DeliveryReceipt(status: 'delivered'));
 
         app(PushNotificationManager::class)->registerDriver('webpush', $webPushMock);
 

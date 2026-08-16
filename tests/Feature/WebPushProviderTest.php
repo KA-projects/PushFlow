@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\PushSubscription;
+use App\Services\Push\Exceptions\DeviceNotRegisteredException;
+use App\Services\Push\Exceptions\PermanentPushException;
 use App\Services\Push\Providers\WebPushProvider;
 use App\Services\Push\PushNotificationManager;
 use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Response;
 use Minishlink\WebPush\MessageSentReport;
 use Minishlink\WebPush\WebPush;
-use RuntimeException;
 use Tests\TestCase;
 
 class WebPushProviderTest extends TestCase
@@ -46,7 +48,7 @@ class WebPushProviderTest extends TestCase
     }
 
     /**
-     * Проверяем, что WebPushProvider выбрасывает RuntimeException при неудачной отправке.
+     * Проверяем, что WebPushProvider выбрасывает PermanentPushException при неудачной отправке.
      */
     public function test_webpush_provider_throws_exception_on_failed_send(): void
     {
@@ -71,8 +73,38 @@ class WebPushProviderTest extends TestCase
             'auth_token' => 'valid_auth_token_placeholder',
         ]);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('WebPush failed: Server error');
+        $this->expectException(PermanentPushException::class);
+
+        $provider->send($subscription, 'Заголовок', 'Текст');
+    }
+
+    /**
+     * Проверяем, что HTTP 410/404 в отчёте WebPush классифицируется как DeviceNotRegistered.
+     */
+    public function test_webpush_provider_classifies_gone_as_device_not_registered(): void
+    {
+        $failedReport = new MessageSentReport(
+            new Request('POST', 'https://example.com/push'),
+            new Response(410),
+            false,
+            'Subscription no longer exists'
+        );
+
+        $webPush = $this->createMock(WebPush::class);
+        $webPush->method('queueNotification');
+        $webPush->method('flush')->willReturn((function () use ($failedReport) {
+            yield $failedReport;
+        })());
+
+        $provider = new WebPushProvider($webPush);
+
+        $subscription = new PushSubscription([
+            'endpoint' => 'https://example.com/push',
+            'public_key' => 'valid_public_key_placeholder',
+            'auth_token' => 'valid_auth_token_placeholder',
+        ]);
+
+        $this->expectException(DeviceNotRegisteredException::class);
 
         $provider->send($subscription, 'Заголовок', 'Текст');
     }

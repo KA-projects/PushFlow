@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Dto\SendPushNotificationData;
 use App\Jobs\SendPushNotification;
+use App\Models\PushNotification;
 use App\Models\PushSubscription;
 use App\Services\Push\PushNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -92,5 +93,38 @@ class PushNotificationServiceTest extends TestCase
 
         $this->assertTrue($queued->isEmpty());
         Queue::assertNothingPushed();
+    }
+
+    /**
+     * Проверяем, что сервис создаёт запись notification и пропускает неактивные подписки.
+     */
+    public function test_service_skips_inactive_subscriptions_and_creates_notifications(): void
+    {
+        Queue::fake();
+
+        $active = PushSubscription::create([
+            'endpoint' => self::ENDPOINT_ONE,
+            'provider' => 'webpush',
+            'public_key' => 'fake-p256dh-key',
+            'auth_token' => 'fake-auth-token',
+        ]);
+        PushSubscription::create([
+            'endpoint' => self::ENDPOINT_TWO,
+            'provider' => 'webpush',
+            'public_key' => 'fake-p256dh-key',
+            'auth_token' => 'fake-auth-token',
+            'is_active' => false,
+        ]);
+
+        $queued = app(PushNotificationService::class)->queueForEndpoint(
+            new SendPushNotificationData(title: 'Заголовок', body: 'Текст')
+        );
+
+        $this->assertCount(1, $queued);
+        Queue::assertPushed(SendPushNotification::class, 1);
+
+        $notification = PushNotification::sole();
+        $this->assertSame('pending', $notification->status->value);
+        $this->assertSame($active->id, $notification->push_subscription_id);
     }
 }
