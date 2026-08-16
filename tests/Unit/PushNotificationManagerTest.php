@@ -2,9 +2,9 @@
 
 namespace Tests\Unit;
 
+use App\Contracts\PushProviderInterface;
 use App\Models\PushSubscription;
 use App\Services\Push\PushNotificationManager;
-use App\Services\Push\PushProviderInterface;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 

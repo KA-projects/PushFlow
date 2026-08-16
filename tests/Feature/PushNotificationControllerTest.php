@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\PushProviderInterface;
 use App\Jobs\SendPushNotification;
 use App\Models\PushSubscription;
 use App\Services\Push\PushNotificationManager;
-use App\Services\Push\PushProviderInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;

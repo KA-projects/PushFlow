@@ -2,6 +2,7 @@
 
 namespace App\Services\Push;
 
+use App\Contracts\PushProviderInterface;
 use InvalidArgumentException;
 
 class PushNotificationManager

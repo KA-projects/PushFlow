@@ -2,8 +2,8 @@
 
 namespace App\Services\Push\Providers;
 
+use App\Contracts\PushProviderInterface;
 use App\Models\PushSubscription;
-use App\Services\Push\PushProviderInterface;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
 use RuntimeException;

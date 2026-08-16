@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Push;
+namespace App\Contracts;
 
 use App\Models\PushSubscription;
 
