@@ -28,12 +28,26 @@
             cursor: not-allowed;
         }
 
+        input {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #d4d4cf;
+            border-radius: 6px;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
         #status {
             margin-top: 1rem;
             padding: 0.75rem 1rem;
             border-radius: 6px;
             background: #f4f4f2;
             white-space: pre-wrap;
+        }
+
+        .send {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e3e3df;
         }
     </style>
 </head>
@@ -43,10 +57,22 @@
     <button id="subscribe" type="button">Подписаться</button>
     <p id="status">Инициализация...</p>
 
+    <section class="send">
+        <h2>Тестовая отправка</h2>
+        <input id="title" type="text" placeholder="Заголовок" value="Тестовое уведомление">
+        <input id="body" type="text" placeholder="Текст" value="Привет из PushFlow!">
+        <button id="send" type="button" disabled>Отправить</button>
+        <p id="send-status">Сначала подпишитесь.</p>
+    </section>
+
     <script>
         const applicationServerKey = @json(config('webpush.vapid.public_key'));
         const subscribeButton = document.getElementById('subscribe');
         const status = document.getElementById('status');
+        const sendButton = document.getElementById('send');
+        const sendStatus = document.getElementById('send-status');
+        const titleInput = document.getElementById('title');
+        const bodyInput = document.getElementById('body');
 
         function urlBase64ToUint8Array(base64String) {
             const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -100,7 +126,43 @@
             }
         }
 
+        async function sendPush() {
+            const registration = await navigator.serviceWorker.getRegistration();
+            const subscription = registration ? await registration.pushManager.getSubscription() : null;
+
+            if (!subscription) {
+                sendStatus.textContent = 'Сначала подпишитесь на уведомления.';
+                return;
+            }
+
+            sendButton.disabled = true;
+            sendStatus.textContent = 'Отправка...';
+
+            try {
+                const response = await fetch('/api/push/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        endpoint: subscription.endpoint,
+                        title: titleInput.value || 'Тестовое уведомление',
+                        body: bodyInput.value || 'Привет из PushFlow!',
+                    }),
+                });
+
+                const data = await response.json();
+
+                sendStatus.textContent = response.ok
+                    ? 'Поставлено в очередь: ' + data.message
+                    : 'Ошибка: ' + (data.message || 'HTTP ' + response.status);
+            } catch (error) {
+                sendStatus.textContent = 'Ошибка: ' + error.message;
+            } finally {
+                sendButton.disabled = false;
+            }
+        }
+
         subscribeButton.addEventListener('click', subscribe);
+        sendButton.addEventListener('click', sendPush);
 
         (async () => {
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -114,6 +176,8 @@
 
             if (existing) {
                 status.textContent = 'Вы уже подписаны на push-уведомления.';
+                sendButton.disabled = false;
+                sendStatus.textContent = 'Нажмите «Отправить», чтобы получить уведомление.';
             } else {
                 status.textContent = 'Готово к подписке. Нажмите кнопку выше.';
             }

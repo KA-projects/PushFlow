@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PushNotificationController;
 use App\Http\Controllers\PushSubscriptionController;
 use Illuminate\Support\Facades\Route;
 
@@ -8,3 +9,4 @@ Route::get('/health', function () {
 });
 
 Route::post('/push/subscribe', [PushSubscriptionController::class, 'subscribe']);
+Route::post('/push/send', [PushNotificationController::class, 'send']);
