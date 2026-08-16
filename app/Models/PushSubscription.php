@@ -14,6 +14,7 @@ class PushSubscription extends Model
         'public_key',
         'auth_token',
         'payload',
+        'is_active',
     ];
 
     /**
@@ -25,6 +26,7 @@ class PushSubscription extends Model
     {
         return [
             'payload' => 'array',
+            'is_active' => 'boolean',
         ];
     }
 
