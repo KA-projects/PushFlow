@@ -1,0 +1,106 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pushflow-app:latest
+    container_name: pushflow-app
+    working_dir: /var/www/html
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: ${DB_DATABASE:-pushflow}
+      DB_USERNAME: ${DB_USERNAME:-laravel}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pushflow
+
+  queue:
+    image: pushflow-app:latest
+    working_dir: /var/www/html
+    command: php artisan queue:work redis --sleep=3 --tries=3
+    deploy:
+      replicas: 1
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: ${DB_DATABASE:-pushflow}
+      DB_USERNAME: ${DB_USERNAME:-laravel}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      - app
+      - postgres
+      - redis
+    networks:
+      - pushflow
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: pushflow-postgres
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-pushflow}
+      POSTGRES_USER: ${DB_USERNAME:-laravel}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-laravel} -d ${DB_DATABASE:-pushflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pushflow
+
+  redis:
+    image: redis:7-alpine
+    container_name: pushflow-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pushflow
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  pushflow:
+    driver: bridge

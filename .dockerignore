@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+vendor
+node_modules
+storage/logs
+storage/*.key
+storage/pail
+public/build
+public/hot
+database/*.sqlite
+*.log
+tests
+Dockerfile
+docker-compose.yml
