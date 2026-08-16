@@ -2,37 +2,30 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\SendPushNotification;
-use App\Models\PushSubscription;
+use App\Http\Requests\SendPushNotificationRequest;
+use App\Services\Push\PushNotificationService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class PushNotificationController extends Controller
 {
+    public function __construct(private PushNotificationService $service) {}
+
     /**
      * Постановка push-уведомления в очередь для одной подписки (по endpoint) или всех.
      */
-    public function send(Request $request): JsonResponse
+    public function send(SendPushNotificationRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'body' => ['required', 'string', 'max:1000'],
-            'endpoint' => ['nullable', 'url', 'max:512'],
-            'extra' => ['nullable', 'array'],
-        ]);
+        $validated = $request->validated();
 
-        $subscriptions = isset($validated['endpoint'])
-            ? PushSubscription::where('endpoint', $validated['endpoint'])->get()
-            : PushSubscription::all();
+        $subscriptions = $this->service->queueForEndpoint(
+            $validated['title'],
+            $validated['body'],
+            $validated['endpoint'] ?? null,
+            $validated['extra'] ?? [],
+        );
 
         if ($subscriptions->isEmpty()) {
             return response()->json(['message' => 'Подписки не найдены.'], 404);
-        }
-
-        $extra = $validated['extra'] ?? [];
-
-        foreach ($subscriptions as $subscription) {
-            SendPushNotification::dispatch($subscription->id, $validated['title'], $validated['body'], $extra);
         }
 
         return response()->json([
