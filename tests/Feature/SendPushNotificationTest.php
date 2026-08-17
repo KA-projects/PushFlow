@@ -150,6 +150,34 @@ class SendPushNotificationTest extends TestCase
     }
 
     /**
+     * Неожиданное (неклассифицированное) исключение помечается failed без ретрая.
+     */
+    public function test_unknown_exception_marks_failed_without_retry(): void
+    {
+        $subscription = $this->makeSubscription();
+        $notification = $this->makeNotification($subscription);
+
+        $provider = Mockery::mock(PushProviderInterface::class);
+        $provider->shouldReceive('send')->andThrow(new \RuntimeException('Invalid data provided'));
+
+        app(PushNotificationManager::class)->registerDriver('test-provider', $provider);
+
+        (new SendPushNotification($notification->id))->handle(app(PushNotificationManager::class));
+
+        $notification->refresh();
+
+        $this->assertSame(PushNotificationStatus::Failed, $notification->status);
+        $this->assertSame('UNKNOWN_ERROR', $notification->error_code);
+        $this->assertSame('Invalid data provided', $notification->error_message);
+
+        $this->assertDatabaseHas('push_attempts', [
+            'notification_id' => $notification->id,
+            'status' => 'failed',
+            'error_code' => 'UNKNOWN_ERROR',
+        ]);
+    }
+
+    /**
      * Проверяем, что при неактивной подписке уведомление помечается failed.
      */
     public function test_job_fails_notification_when_subscription_inactive(): void

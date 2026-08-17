@@ -89,8 +89,10 @@ class SendPushNotification implements ShouldQueue
             $this->failPermanently($notification, $exception->getErrorCode(), $exception->getMessage());
         } catch (PermanentPushException $exception) {
             $this->failPermanently($notification, $exception->getErrorCode(), $exception->getMessage());
-        } catch (TemporaryPushException|Throwable $exception) {
+        } catch (TemporaryPushException $exception) {
             $this->releaseForRetry($notification, $exception);
+        } catch (Throwable $exception) {
+            $this->failPermanently($notification, 'UNKNOWN_ERROR', $exception->getMessage());
         }
     }
 
