@@ -5,10 +5,12 @@
 ## Запуск
 
 ```bash
+cp .env.example .env
 docker compose up -d                                    # сервисы: app, queue, postgres, redis
 docker compose exec app php artisan migrate --force
 docker compose exec app php artisan key:generate
 docker compose exec app php artisan push:vapid:generate # сгенерировать VAPID-ключи в .env
+docker compose restart app queue
 ```
 
 Проверка: `curl localhost:8000/api/health` → `{"status":"ok"}`.
