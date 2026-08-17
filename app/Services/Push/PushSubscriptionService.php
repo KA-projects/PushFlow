@@ -19,7 +19,19 @@ class PushSubscriptionService
                 'public_key' => $data->p256dh,
                 'auth_token' => $data->auth,
                 'user_id' => auth()->id(),
+                'is_active' => true,
             ]
         );
+    }
+
+    /**
+     * Деактивация подписки по endpoint.
+     * Запись сохраняется для истории, но уведомления на неё больше не отправляются.
+     */
+    public function unsubscribe(string $endpoint): bool
+    {
+        return (bool) PushSubscription::query()
+            ->where('endpoint', $endpoint)
+            ->update(['is_active' => false]);
     }
 }

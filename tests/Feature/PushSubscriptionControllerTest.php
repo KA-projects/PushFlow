@@ -98,6 +98,54 @@ class PushSubscriptionControllerTest extends TestCase
     }
 
     /**
+     * Проверяем, что POST /api/push/unsubscribe деактивирует подписку по endpoint.
+     */
+    public function test_unsubscribe_deactivates_subscription(): void
+    {
+        PushSubscription::create([
+            'endpoint' => self::ENDPOINT,
+            'provider' => 'webpush',
+            'public_key' => 'fake-p256dh-key',
+            'auth_token' => 'fake-auth-token',
+        ]);
+
+        $response = $this->postJson('/api/push/unsubscribe', [
+            'endpoint' => self::ENDPOINT,
+        ]);
+
+        $response->assertOk()->assertJson(['message' => 'Подписка отключена.']);
+
+        $this->assertDatabaseHas('push_subscriptions', [
+            'endpoint' => self::ENDPOINT,
+            'is_active' => false,
+        ]);
+    }
+
+    /**
+     * Проверяем, что отписка от несуществующего endpoint возвращает 404.
+     */
+    public function test_unsubscribe_returns_404_for_unknown_endpoint(): void
+    {
+        $this->postJson('/api/push/unsubscribe', [
+            'endpoint' => self::ENDPOINT,
+        ])->assertNotFound();
+    }
+
+    /**
+     * Проверяем, что отписка требует валидный endpoint.
+     */
+    public function test_unsubscribe_requires_valid_endpoint(): void
+    {
+        $this->postJson('/api/push/unsubscribe', [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('endpoint');
+
+        $this->postJson('/api/push/unsubscribe', [
+            'endpoint' => 'not-a-url',
+        ])->assertUnprocessable()->assertJsonValidationErrors('endpoint');
+    }
+
+    /**
      * Проверяем, что тестовая страница /push-test отдаётся с кодом 200.
      */
     public function test_push_test_page_is_accessible(): void

@@ -55,6 +55,7 @@
     <h1>Push-уведомления</h1>
     <p>Нажмите кнопку, чтобы подписаться на push-уведомления.</p>
     <button id="subscribe" type="button">Подписаться</button>
+    <button id="unsubscribe" type="button" disabled>Отписаться</button>
     <p id="status">Инициализация...</p>
 
     <section class="send">
@@ -68,6 +69,7 @@
     <script>
         const applicationServerKey = @json(config('webpush.vapid.public_key'));
         const subscribeButton = document.getElementById('subscribe');
+        const unsubscribeButton = document.getElementById('unsubscribe');
         const status = document.getElementById('status');
         const sendButton = document.getElementById('send');
         const sendStatus = document.getElementById('send-status');
@@ -121,9 +123,52 @@
 
                 await saveSubscription(subscription);
                 status.textContent = 'Подписка успешно сохранена.';
+                updateUiState(true);
             } catch (error) {
                 status.textContent = 'Ошибка: ' + error.message;
             }
+        }
+
+        async function unsubscribe() {
+            const registration = await navigator.serviceWorker.getRegistration();
+            const subscription = registration ? await registration.pushManager.getSubscription() : null;
+
+            if (!subscription) {
+                status.textContent = 'Вы не подписаны на уведомления.';
+                updateUiState(false);
+                return;
+            }
+
+            unsubscribeButton.disabled = true;
+            status.textContent = 'Отписка...';
+
+            try {
+                const response = await fetch('/api/push/unsubscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ endpoint: subscription.endpoint }),
+                });
+
+                if (!response.ok && response.status !== 404) {
+                    throw new Error('Не удалось отписаться (HTTP ' + response.status + ')');
+                }
+
+                await subscription.unsubscribe();
+                status.textContent = 'Вы отписались от push-уведомлений.';
+                updateUiState(false);
+            } catch (error) {
+                status.textContent = 'Ошибка: ' + error.message;
+                unsubscribeButton.disabled = false;
+            }
+        }
+
+        function updateUiState(subscribed) {
+            subscribeButton.disabled = subscribed;
+            unsubscribeButton.disabled = !subscribed;
+            sendButton.disabled = !subscribed;
+            sendStatus.textContent = subscribed
+                ? 'Нажмите «Отправить», чтобы получить уведомление.'
+                : 'Сначала подпишитесь.';
         }
 
         async function sendPush() {
@@ -162,6 +207,7 @@
         }
 
         subscribeButton.addEventListener('click', subscribe);
+        unsubscribeButton.addEventListener('click', unsubscribe);
         sendButton.addEventListener('click', sendPush);
 
         (async () => {
@@ -176,10 +222,10 @@
 
             if (existing) {
                 status.textContent = 'Вы уже подписаны на push-уведомления.';
-                sendButton.disabled = false;
-                sendStatus.textContent = 'Нажмите «Отправить», чтобы получить уведомление.';
+                updateUiState(true);
             } else {
                 status.textContent = 'Готово к подписке. Нажмите кнопку выше.';
+                updateUiState(false);
             }
         })();
     </script>

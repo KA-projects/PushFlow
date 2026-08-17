@@ -9,4 +9,5 @@ Route::get('/health', function () {
 });
 
 Route::post('/push/subscribe', [PushSubscriptionController::class, 'subscribe']);
+Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'unsubscribe']);
 Route::post('/push/send', [PushNotificationController::class, 'send']);
