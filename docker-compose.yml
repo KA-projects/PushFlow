@@ -6,7 +6,7 @@ services:
     image: pushflow-app:latest
     container_name: pushflow-app
     working_dir: /var/www/html
-    command: php artisan serve --host=0.0.0.0 --port=8000
+    command: php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000
     ports:
       - "${APP_PORT:-8000}:8000"
     environment:
@@ -25,6 +25,9 @@ services:
       CACHE_STORE: redis
       PUSH_RECEIPT_DELAY: ${PUSH_RECEIPT_DELAY:-10}
       PUSH_RECEIPT_MAX_ATTEMPTS: ${PUSH_RECEIPT_MAX_ATTEMPTS:-5}
+      OCTANE_SERVER: swoole
+      OCTANE_WORKERS: ${OCTANE_WORKERS:-4}
+      OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-500}
     volumes:
       - ./:/var/www/html
       - ./vendor:/var/www/html/vendor
