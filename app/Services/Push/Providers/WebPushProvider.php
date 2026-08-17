@@ -10,6 +10,7 @@ use App\Services\Push\Exceptions\DeviceNotRegisteredException;
 use App\Services\Push\Exceptions\PermanentPushException;
 use App\Services\Push\Exceptions\TemporaryPushException;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Minishlink\WebPush\MessageSentReport;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
@@ -28,26 +29,32 @@ class WebPushProvider implements PushProviderInterface
             ],
         ]);
 
-        $webPushSubscription = Subscription::create([
-            'endpoint' => $subscription->endpoint,
-            'keys' => [
-                'p256dh' => $subscription->public_key,
-                'auth' => $subscription->auth_token,
-            ],
-        ]);
+        try {
+            $webPushSubscription = Subscription::create([
+                'endpoint' => $subscription->endpoint,
+                'keys' => [
+                    'p256dh' => $subscription->public_key,
+                    'auth' => $subscription->auth_token,
+                ],
+            ]);
 
-        $webPush->queueNotification(
-            $webPushSubscription,
-            json_encode(array_merge([
-                'title' => $title,
-                'body' => $body,
-            ], $extra))
-        );
+            $webPush->queueNotification(
+                $webPushSubscription,
+                json_encode(array_merge([
+                    'title' => $title,
+                    'body' => $body,
+                ], $extra))
+            );
 
-        foreach ($webPush->flush() as $report) {
-            if (! $report->isSuccess()) {
-                throw $this->exceptionFromReport($report);
+            foreach ($webPush->flush() as $report) {
+                if (! $report->isSuccess()) {
+                    throw $this->exceptionFromReport($report);
+                }
             }
+        } catch (InvalidArgumentException $exception) {
+            // Невалидные ключи подписки (p256dh/auth) — постоянная ошибка данных,
+            // ретраи не помогут.
+            throw PermanentPushException::invalidToken();
         }
 
         return new SendResult(ticketId: 'webpush-'.$subscription->id.'-'.Str::random(8));

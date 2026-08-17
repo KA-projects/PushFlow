@@ -29,8 +29,10 @@ class PushStressSeed extends Command
             $rows = $chunk->map(fn (int $i) => [
                 'provider' => $provider,
                 'endpoint' => "https://stress.example.com/{$provider}-{$i}-".Str::uuid(),
-                'public_key' => 'stress-public-key',
-                'auth_token' => 'stress-auth-token',
+                // Валидные base64url-ключи: без них webpush-провайдер не сможет
+                // декодировать p256dh/auth и будет падать при отправке.
+                'public_key' => rtrim(strtr(base64_encode(random_bytes(65)), '+/', '-_'), '='),
+                'auth_token' => rtrim(strtr(base64_encode(random_bytes(16)), '+/', '-_'), '='),
                 'created_at' => now(),
                 'updated_at' => now(),
             ])->all();

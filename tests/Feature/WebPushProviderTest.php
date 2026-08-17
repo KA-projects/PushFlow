@@ -48,6 +48,28 @@ class WebPushProviderTest extends TestCase
     }
 
     /**
+     * Невалидные ключи подписки — PermanentPushException, а не retryable ошибка.
+     */
+    public function test_webpush_provider_classifies_invalid_keys_as_permanent(): void
+    {
+        $webPush = $this->createMock(WebPush::class);
+        $webPush->method('queueNotification');
+        $webPush->method('flush')->willThrowException(new \InvalidArgumentException('Invalid data provided'));
+
+        $provider = new WebPushProvider($webPush);
+
+        $subscription = new PushSubscription([
+            'endpoint' => 'https://example.com/push',
+            'public_key' => 'stress-public-key',
+            'auth_token' => 'stress-auth-token',
+        ]);
+
+        $this->expectException(PermanentPushException::class);
+
+        $provider->send($subscription, 'Заголовок', 'Текст');
+    }
+
+    /**
      * Проверяем, что WebPushProvider выбрасывает PermanentPushException при неудачной отправке.
      */
     public function test_webpush_provider_throws_exception_on_failed_send(): void
