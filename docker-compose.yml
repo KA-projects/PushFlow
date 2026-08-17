@@ -39,7 +39,7 @@ services:
   queue:
     image: pushflow-app:latest
     working_dir: /var/www/html
-    command: php artisan queue:work redis --sleep=3 --tries=3
+    command: php artisan horizon
     deploy:
       replicas: 1
     environment:
@@ -58,6 +58,9 @@ services:
       CACHE_STORE: redis
       PUSH_RECEIPT_DELAY: ${PUSH_RECEIPT_DELAY:-10}
       PUSH_RECEIPT_MAX_ATTEMPTS: ${PUSH_RECEIPT_MAX_ATTEMPTS:-5}
+      HORIZON_TRIES: ${HORIZON_TRIES:-3}
+      HORIZON_TIMEOUT: ${HORIZON_TIMEOUT:-30}
+      HORIZON_MAX_PROCESSES: ${HORIZON_MAX_PROCESSES:-3}
     volumes:
       - ./:/var/www/html
       - ./vendor:/var/www/html/vendor

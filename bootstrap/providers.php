@@ -1,9 +1,7 @@
 <?php
 
-use App\Providers\AppServiceProvider;
-use App\Providers\PushServiceProvider;
-
 return [
-    AppServiceProvider::class,
-    PushServiceProvider::class,
+    App\Providers\AppServiceProvider::class,
+    App\Providers\HorizonServiceProvider::class,
+    App\Providers\PushServiceProvider::class,
 ];

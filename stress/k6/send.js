@@ -23,7 +23,7 @@ export default function () {
             title: 'Стресс-тест',
             body: 'Нагрузочное тестирование PushFlow',
         }),
-        { headers: { 'Content-Type': 'application/json' } },
+        { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } },
     );
 
     check(res, {
