@@ -27,7 +27,7 @@ services:
       PUSH_RECEIPT_MAX_ATTEMPTS: ${PUSH_RECEIPT_MAX_ATTEMPTS:-5}
     volumes:
       - ./:/var/www/html
-      - vendor:/var/www/html/vendor
+      - ./vendor:/var/www/html/vendor
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,7 +60,7 @@ services:
       PUSH_RECEIPT_MAX_ATTEMPTS: ${PUSH_RECEIPT_MAX_ATTEMPTS:-5}
     volumes:
       - ./:/var/www/html
-      - vendor:/var/www/html/vendor
+      - ./vendor:/var/www/html/vendor
     depends_on:
       - app
       - postgres
@@ -106,7 +106,6 @@ services:
 volumes:
   pgdata:
   redisdata:
-  vendor:
 
 networks:
   pushflow:
