@@ -1,6 +1,6 @@
 # PushFlow
 
-Сервис push-уведомлений на Laravel 12 (PHP 8.2, PostgreSQL, Redis). Запускается в Docker, отправка — асинхронно через очередь. Провайдеры: `webpush` (VAPID) и `fcm` (мок).
+Сервис push-уведомлений на Laravel 12 (PHP 8.2, PostgreSQL, Redis). Запускается в Docker, отправка — асинхронно через очередь (Laravel Horizon). Провайдеры: `webpush` (VAPID) и `fcm` (мок).
 
 ## Запуск
 
@@ -46,12 +46,28 @@ curl -X POST localhost:8000/api/push/send \
 docker compose exec app php artisan test               # тесты
 docker compose exec app php artisan test --filter=Stress   # только стресс-тесты (in-process)
 docker compose exec app ./vendor/bin/pint              # стиль кода
-docker compose exec app php artisan queue:work redis   # воркер очереди вручную
-docker compose up -d --scale queue=3                   # масштабировать воркеры
+docker compose exec app php artisan horizon            # воркер очереди (Horizon)
 docker compose exec app php artisan push:stress:seed --count=1000 --provider=fcm  # сид подписок для live-стресса
 docker compose exec app php artisan push:stress:report --expected=1000            # отчёт по целостности после live-стресса
 bash stress/run.sh                                     # полный live-стресс (k6)
 ```
+
+## Мониторинг очереди (Horizon)
+
+Очередью управляет Laravel Horizon: сервис `queue` в compose запускает `php artisan horizon`
+(супервизоры с воркерами). Дашборд Horizon доступен на http://localhost:8000/horizon.
+
+Настройки воркеров (`supervisor-1`) задаются переменными в `.env`:
+
+| Переменная | По умолчанию | Описание |
+|------------|--------------|----------|
+| `HORIZON_TRIES` | `3` | Попытки обработки задачи |
+| `HORIZON_TIMEOUT` | `30` | Таймаут задачи, сек |
+| `HORIZON_MAX_PROCESSES` | `3` | Число воркеров на супервизор |
+
+Масштабирование — через число воркеров в супервизоре (поднимайте `HORIZON_MAX_PROCESSES`),
+а не через число реплик сервиса. В не-local окружениях доступ к дашборду ограничен
+гейтом `viewHorizon` в `app/Providers/HorizonServiceProvider.php`.
 
 ## Просмотр данных в БД (tinker)
 
@@ -97,6 +113,9 @@ k6-нагрузка на `/api/push/send` → ожидание слива оче
 bash stress/run.sh
 ```
 
+```bash
+EXPECTED=100 PROVIDER=webpush bash stress/run.sh
+```
 Параметры (env): `EXPECTED` — число подписок/ожидание отчёта (по умолчанию `1000`), `PROVIDER` — провайдер подписок (`fcm`). Сценарий и пороги k6 — в `stress/k6/send.js` (по умолчанию 0→50 VU за 30s, hold 60s, ramp-down; `http_req_failed < 1%`, `p95 < 500ms`).
 
 Вручную (эквивалент `run.sh`):
@@ -104,7 +123,6 @@ bash stress/run.sh
 ```bash
 docker compose up -d
 docker compose exec app php artisan migrate --force
-docker compose up -d --scale queue=3
 docker compose exec app php artisan push:stress:seed --count=1000 --provider=fcm
 NET=$(docker network ls --format '{{.Name}}' | grep pushflow)
 docker run --rm -i --network "$NET" -e "APP_URL=http://app:8000" \

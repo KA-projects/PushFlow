@@ -14,8 +14,8 @@ echo "==> [1/7] Поднимаем стек и применяем миграци
 docker compose up -d
 docker compose exec -T app php artisan migrate --force
 
-echo "==> [2/7] Масштабируем воркеров очереди (3)"
-docker compose up -d --scale queue=3
+echo "==> [2/7] Поднимаем воркеры очереди (Horizon, HORIZON_MAX_PROCESSES)"
+docker compose up -d queue
 
 echo "==> [3/7] Сидим активные подписки (${EXPECTED}, провайдер ${PROVIDER})"
 docker compose exec -T app php artisan push:stress:seed --count="${EXPECTED}" --provider="${PROVIDER}"
