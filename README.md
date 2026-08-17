@@ -44,9 +44,13 @@ curl -X POST localhost:8000/api/push/send \
 
 ```bash
 docker compose exec app php artisan test               # тесты
+docker compose exec app php artisan test --filter=Stress   # только стресс-тесты (in-process)
 docker compose exec app ./vendor/bin/pint              # стиль кода
 docker compose exec app php artisan queue:work redis   # воркер очереди вручную
 docker compose up -d --scale queue=3                   # масштабировать воркеры
+docker compose exec app php artisan push:stress:seed --count=1000 --provider=fcm  # сид подписок для live-стресса
+docker compose exec app php artisan push:stress:report --expected=1000            # отчёт по целостности после live-стресса
+bash stress/run.sh                                     # полный live-стресс (k6)
 ```
 
 ## Просмотр данных в БД (tinker)
@@ -69,3 +73,45 @@ docker compose exec app php artisan tinker --execute="dump(DB::table('jobs')->co
 ```
 
 Интерактивно: `docker compose exec app php artisan tinker` (далее `App\Models\PushNotification::all();` и т.п.).
+
+## Стресс-тесты
+
+### In-process (PHPUnit, офлайн)
+
+Массовые сценарии на SQLite `:memory:` + sync queue: фан-аут на 500 подписок без дублей,
+атомарный claim при гонке воркеров, маршрутизация по провайдерам, шторм retry, массовая
+проверка receipts.
+
+```bash
+docker compose exec app php artisan test --filter=Stress
+```
+
+### Live (реальный HTTP-нагрузка через k6)
+
+Полный прогон по живому Docker-стеку (`app` + `queue` + `postgres` + `redis`): сид подписок →
+k6-нагрузка на `/api/push/send` → ожидание слива очереди → отчёт по целостности данных.
+
+```bash
+# 1. Для быстрого слива очереди в .env выставить PUSH_RECEIPT_DELAY=1
+# 2. Запустить оркестратор (поднимет стек, мигрирует, засеет подписки, запустит k6, проверит целостность)
+bash stress/run.sh
+```
+
+Параметры (env): `EXPECTED` — число подписок/ожидание отчёта (по умолчанию `1000`), `PROVIDER` — провайдер подписок (`fcm`). Сценарий и пороги k6 — в `stress/k6/send.js` (по умолчанию 0→50 VU за 30s, hold 60s, ramp-down; `http_req_failed < 1%`, `p95 < 500ms`).
+
+Вручную (эквивалент `run.sh`):
+
+```bash
+docker compose up -d
+docker compose exec app php artisan migrate --force
+docker compose up -d --scale queue=3
+docker compose exec app php artisan push:stress:seed --count=1000 --provider=fcm
+NET=$(docker network ls --format '{{.Name}}' | grep pushflow)
+docker run --rm -i --network "$NET" -e "APP_URL=http://app:8000" \
+  -v "$PWD/stress/k6:/scripts" grafana/k6 run /scripts/send.js
+docker compose exec app php artisan push:stress:report --expected=1000   # exit 0/1 для CI
+```
+
+Внимание: каждый запрос без `endpoint` создаёт `count` notifications + `count` job'ов, т.е.
+полная нагрузка = запросы × число подписок. Для быстрого прогона уменьшайте `EXPECTED`
+(например, `EXPECTED=100 bash stress/run.sh`).
