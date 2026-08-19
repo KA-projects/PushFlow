@@ -13,4 +13,9 @@ if [ ! -f vendor/autoload.php ]; then
     ) 9>vendor/.composer-install.lock
 fi
 
+# Генерируем APP_KEY, если он не задан ни в окружении, ни в .env.
+if [ -z "${APP_KEY:-}" ] && ! grep -qE '^APP_KEY=.+' .env 2>/dev/null; then
+    php artisan key:generate --force --no-interaction
+fi
+
 exec "$@"
