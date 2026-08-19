@@ -26,7 +26,7 @@ services:
       PUSH_RECEIPT_DELAY: ${PUSH_RECEIPT_DELAY:-10}
       PUSH_RECEIPT_MAX_ATTEMPTS: ${PUSH_RECEIPT_MAX_ATTEMPTS:-5}
       OCTANE_SERVER: swoole
-      OCTANE_WORKERS: ${OCTANE_WORKERS:-4}
+      OCTANE_WORKERS: ${OCTANE_WORKERS:-8}
       OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-500}
     volumes:
       - ./:/var/www/html
@@ -68,9 +68,12 @@ services:
       - ./:/var/www/html
       - ./vendor:/var/www/html/vendor
     depends_on:
-      - app
-      - postgres
-      - redis
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - pushflow
 
@@ -96,7 +99,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: pushflow-redis
-    command: redis-server --appendonly yes
+    command: redis-server --save "" --appendonly no
     ports:
       - "6379:6379"
     volumes:
