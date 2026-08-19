@@ -15,15 +15,15 @@ class PushNotificationController extends Controller
      */
     public function send(SendPushNotificationRequest $request): JsonResponse
     {
-        $subscriptions = $this->service->queueForEndpoint($request->toData());
+        $queued = $this->service->queueForEndpoint($request->toData());
 
-        if ($subscriptions->isEmpty()) {
+        if ($queued->isEmpty()) {
             return response()->json(['message' => 'Подписки не найдены.'], 404);
         }
 
         return response()->json([
             'message' => 'Уведомления поставлены в очередь.',
-            'queued' => $subscriptions->count(),
+            'queued' => $queued->count(),
         ]);
     }
 }
