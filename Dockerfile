@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         unzip \
         git \
         curl \
+        procps \
     && docker-php-ext-install -j"$(nproc)" \
         pdo_pgsql \
         pgsql \
@@ -33,8 +34,8 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 COPY . .
 
-RUN (composer install --no-interaction --prefer-dist --optimize-autoloader --no-audit \
-        || composer install --no-interaction --prefer-dist --optimize-autoloader --no-audit \
+RUN (composer install --no-interaction --prefer-dist --optimize-autoloader \
+        || composer install --no-interaction --prefer-dist --optimize-autoloader \
         || echo "WARNING: build-time composer install failed (network); deps will be installed at container start") \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
