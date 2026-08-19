@@ -8,6 +8,7 @@ use App\Jobs\SendPushNotification;
 use App\Models\PushSubscription;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 
 class PushNotificationService
 {
@@ -41,9 +42,10 @@ class PushNotificationService
             return $ids;
         });
 
-        foreach ($notificationIds as $id) {
-            SendPushNotification::dispatch($id);
-        }
+        // Все Job ставятся одним pipeline-вызовом (Queue::bulk) — один round-trip до Redis вместо N LPUSH.
+        Queue::bulk(
+            array_map(fn (int $id) => new SendPushNotification($id), $notificationIds),
+        );
 
         return $subscriptions;
     }
@@ -68,10 +70,16 @@ class PushNotificationService
             $subscription->provider,
             $now,
             $now,
-        ])->all();
+        ])->values()->all();
+
+        if ($rows === []) {
+            return [];
+        }
+
+        $columnCount = count($rows[0]);
 
         $placeholders = implode(',', array_map(
-            fn (): string => '('.implode(',', array_fill(0, count($rows[0]), '?')).')',
+            fn (): string => '('.implode(',', array_fill(0, $columnCount, '?')).')',
             $rows,
         ));
 
